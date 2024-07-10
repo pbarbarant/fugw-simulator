@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fugw-simulator"
+authors = [
+  {name = "Pierre-Louis Barbarant", email = "plbarbarant@gmail.com"},
+]
+description = "A data simulation tool for FUGW"
+readme = "README.md"
+keywords = ["optimal transport", "fugw", "visualization", "simulation"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+dynamic = ["version"]
+requires-python = ">=3.7"
+dependencies = [
+  "joblib>=1.2.0",
+  "fugw",
+  "matplotlib",
+  "nibabel",
+  "nilearn[plotly]",
+  "numpy<2",
+  "pandas",
+  "rich>=13.3.1",
+  "scikit-learn",
+  "scipy",
+  "torch>=1.13",
+  "tvb-gdist>=2.1.1",
+  "tqdm",
+]
+
+[project.optional-dependencies]
+dev = [
+  "black",
+  "pre-commit",
+]
+test = [
+  "flake8",
+  "nilearn",
+  "pyproject-flake8",
+  "pytest>=7.2",
+]
+
+
+[tool.black]
+line-length = 79
+preview = true
+
+[tool.flake8]
+ignore = ["E203", "W503"]
+
+[tool.setuptools.dynamic]
+version = {attr = "fugw_simulator.__version__"}
