@@ -46,6 +46,8 @@ test = [
   "pytest>=7.2",
 ]
 
+[project.urls]
+repository = "https://github.com/pbarbarant/fugw-simulator.git"
 
 [tool.black]
 line-length = 79
