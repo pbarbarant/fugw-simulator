@@ -37,6 +37,7 @@ dependencies = [
 dev = [
   "black",
   "pre-commit",
+  "pytest-mypy-plugins",
 ]
 test = [
   "flake8",
@@ -52,6 +53,27 @@ preview = true
 
 [tool.flake8]
 ignore = ["E203", "W503"]
+
+[tool.mypy]
+# Specify the files and directories to type check
+files = ["src/fugw_simulator", "tests"]
+pretty = true
+plugins = ["numpy.typing.mypy_plugin"]
+
+# Set the Python version
+python_version = "3.9"
+
+# Specify the strictness of type checking
+strict = true
+
+# Ignore missing imports
+ignore_missing_imports = true
+
+# Enable incremental mode
+incremental = true
+
+# Show error codes
+show_error_codes = true
 
 [tool.setuptools.dynamic]
 version = {attr = "fugw_simulator.__version__"}
