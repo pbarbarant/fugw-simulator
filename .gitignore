@@ -15,3 +15,5 @@ doc/**/generated
 
 # Vscode
 .vscode
+
+output/
