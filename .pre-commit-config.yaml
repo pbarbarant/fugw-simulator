@@ -14,4 +14,4 @@ repos:
     rev: v1.10.1
     hooks:
     - id: mypy
-      additional_dependencies: [mypy-extensions]
+      additional_dependencies: [mypy-extensions, "npt-promote"]
