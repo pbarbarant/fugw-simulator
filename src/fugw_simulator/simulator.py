@@ -340,7 +340,13 @@ def main() -> None:
     ]
     geometry_list = [geometry, geometry]
 
-    output_dir_one_mapping = Path("output/one_mapping")
+    alpha = 0.05
+    rho = 1e8
+    eps = 1e-4
+
+    output_dir_one_mapping = Path(
+        f"output/one_mapping_alpha_{alpha}_rho_{rho}_eps_{eps}"
+    )
     output_dir_one_mapping.mkdir(exist_ok=True, parents=True)
     _ = fugw_simple_mapping(
         output_dir_one_mapping,
@@ -348,9 +354,9 @@ def main() -> None:
         simulated_target,
         fsaverage,
         mesh=mesh,
-        alpha=0.5,
-        rho=1,
-        eps=1e-4,
+        alpha=alpha,
+        rho=rho,
+        eps=eps,
         nits_bcd=100,
         nits_uot=1,
         device=device,
@@ -358,7 +364,9 @@ def main() -> None:
         output_gif=True,
     )
 
-    output_dir_barycenter = Path("output/barycenter")
+    output_dir_barycenter = Path(
+        f"output/barycenter_alpha_{alpha}_rho_{rho}_eps_{eps}"
+    )
     output_dir_barycenter.mkdir(exist_ok=True, parents=True)
     _ = fugw_coarse_barycenter(
         output_dir_barycenter,
