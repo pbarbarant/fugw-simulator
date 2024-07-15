@@ -223,6 +223,7 @@ def fugw_simple_mapping(
     nits_bcd: int = 100,
     nits_uot: int = 1,
     device: torch.device = torch.device("cpu"),
+    verbose: bool = True,
     output_gif: bool = True,
 ) -> FUGW:
     mapping = FUGW(
@@ -240,7 +241,7 @@ def fugw_simple_mapping(
         target_features,
         source_geometry=geometry / geometry.max(),
         target_geometry=geometry / geometry.max(),
-        verbose=True,
+        verbose=verbose,
         solver_params={"nits_bcd": nits_bcd, "nits_uot": nits_uot},
         callback_bcd=partial(
             callback_one_mapping,
@@ -307,7 +308,7 @@ def fugw_coarse_barycenter(
 
 
 def main() -> None:
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
     mesh = "infl_left"
     fsaverage = datasets.fetch_surf_fsaverage(mesh="fsaverage3")
     vertices, _ = surface.load_surf_mesh(fsaverage[mesh])
@@ -324,6 +325,7 @@ def main() -> None:
     #     vertices, [4000, 5000, 10000], sigma=8, noise_level=0.2
     # )
 
+    print("Computing geometry...")
     geometry = compute_geometry_from_mesh(fsaverage[mesh])
     # Normalize geometry
     geometry = geometry / geometry.max()
@@ -341,20 +343,21 @@ def main() -> None:
     # output_dir = Path("output/one_mapping")
     output_dir = Path("output/barycenter")
     output_dir.mkdir(exist_ok=True, parents=True)
-    # _ = fugw_simple_mapping(
-    #     output_dir,
-    #     simulated_source,
-    #     simulated_target,
-    #     fsaverage,
-    #     mesh=mesh,
-    #     alpha=0.5,
-    #     rho=1,
-    #     eps=1e-4,
-    #     nits_bcd=10,
-    #     nits_uot=1,
-    #     device=device,
-    #     output_gif=True,
-    # )
+    _ = fugw_simple_mapping(
+        output_dir,
+        simulated_source,
+        simulated_target,
+        fsaverage,
+        mesh=mesh,
+        alpha=0.5,
+        rho=1,
+        eps=1e-4,
+        nits_bcd=100,
+        nits_uot=1,
+        device=device,
+        verbose=True,
+        output_gif=True,
+    )
 
     _ = fugw_coarse_barycenter(
         output_dir,
