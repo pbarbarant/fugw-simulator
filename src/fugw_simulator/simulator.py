@@ -102,7 +102,7 @@ def callback_one_mapping(
     output_dir: Path = Path("output"),
 ) -> None:
     # Get current transport plan and tensorize features
-    pi = locals["pi"]
+    pi = _make_tensor(locals["pi"], device)
     source_features_tensor = _make_tensor(source_features, device)
     target_features_tensor = _make_tensor(target_features, device)
     transformed_features = (
