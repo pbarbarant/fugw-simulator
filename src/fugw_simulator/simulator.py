@@ -340,11 +340,10 @@ def main() -> None:
     ]
     geometry_list = [geometry, geometry]
 
-    # output_dir = Path("output/one_mapping")
-    output_dir = Path("output/barycenter")
-    output_dir.mkdir(exist_ok=True, parents=True)
+    output_dir_one_mapping = Path("output/one_mapping")
+    output_dir_one_mapping.mkdir(exist_ok=True, parents=True)
     _ = fugw_simple_mapping(
-        output_dir,
+        output_dir_one_mapping,
         simulated_source,
         simulated_target,
         fsaverage,
@@ -359,8 +358,10 @@ def main() -> None:
         output_gif=True,
     )
 
+    output_dir_barycenter = Path("output/barycenter")
+    output_dir_barycenter.mkdir(exist_ok=True, parents=True)
     _ = fugw_coarse_barycenter(
-        output_dir,
+        output_dir_barycenter,
         features_list,
         weights_list,
         geometry_list,
