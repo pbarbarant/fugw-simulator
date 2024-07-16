@@ -110,7 +110,7 @@ def fugw_sparse_mapping(
         eps=eps_fine,
     )
 
-    coarse_to_fine.fit(
+    source_sample, target_sample, mask = coarse_to_fine.fit(
         source_features=source_features,
         target_features=target_features,
         source_geometry_embeddings=geometry_embedding,
@@ -147,7 +147,7 @@ def fugw_sparse_mapping(
     if output_gif:
         generate_gif(output_dir, duration=1)
 
-    return fine_mapping
+    return source_sample, target_sample, mask
 
 
 def fugw_coarse_barycenter(
@@ -371,9 +371,9 @@ def main() -> None:
         rho_fine=rho,
         eps_coarse=eps,
         eps_fine=eps,
-        selection_radius=5,
-        nits_bcd=100,
-        nits_uot=1,
+        selection_radius=2,
+        nits_bcd=5,
+        nits_uot=100,
         device=device,
         verbose=True,
         output_gif=True,
