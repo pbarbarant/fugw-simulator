@@ -11,7 +11,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 import torch
-from fugw.mappings import FUGW, FUGWBarycenter, FUGWSparseBarycenter
+from fugw.mappings import (
+    FUGW,
+    FUGWSparse,
+    FUGWBarycenter,
+    FUGWSparseBarycenter,
+)
 from fugw.scripts import coarse_to_fine, lmds
 from fugw.utils import _make_tensor
 from nilearn import datasets, plotting, surface
@@ -28,14 +33,14 @@ def sample_geometry(
         triangles,
         n_landmarks=100,
         k=3,
-        n_jobs=2,
+        n_jobs=10,
         verbose=True,
     )
     mesh_sample = coarse_to_fine.sample_mesh_uniformly(
         coordinates,
         triangles,
         embeddings=geometry_embedding,
-        n_samples=1000,
+        n_samples=n_samples,
     )
     (
         geometry_embedding_normalized,
@@ -120,7 +125,7 @@ def compute_geometry_from_mesh(mesh_path: str) -> Any:
     return geometry
 
 
-def callback_one_mapping(
+def callback_coarse_mapping(
     locals: dict[str, Any],
     source_features: npt.NDArray[Any],
     target_features: npt.NDArray[Any],
@@ -137,6 +142,70 @@ def callback_one_mapping(
     transformed_features = (
         pi.T @ source_features_tensor.T / pi.sum(dim=0).reshape(-1, 1)
     ).T
+
+    fig = plt.figure(figsize=(3 * 3, 3))
+    fig.suptitle(
+        f"BCD step {locals['idx']}, alpha={locals['alpha']},"
+        f" rho={locals['rho_s']}, eps={locals['eps']}"
+    )
+    grid_spec = gridspec.GridSpec(1, 3, figure=fig)
+
+    ax = fig.add_subplot(grid_spec[0, 0], projection="3d")
+    surf_plot_wrapper(
+        fsaverage,
+        source_features_tensor.cpu().numpy(),
+        mesh=mesh,
+        title="Source",
+        axes=ax,
+        colorbar=False,
+    )
+
+    ax = fig.add_subplot(grid_spec[0, 1], projection="3d")
+    surf_plot_wrapper(
+        fsaverage,
+        transformed_features.cpu().numpy(),
+        mesh=mesh,
+        title="Projected source",
+        axes=ax,
+        colorbar=False,
+    )
+
+    ax = fig.add_subplot(grid_spec[0, 2], projection="3d")
+    surf_plot_wrapper(
+        fsaverage,
+        target_features_tensor.cpu().numpy()[contrast_idx, :],
+        mesh=mesh,
+        title="Target",
+        axes=ax,
+        colorbar=False,
+    )
+    fig.tight_layout()
+    fig.savefig(output_dir / f"bcd_step_{locals['idx']}.png")
+    plt.close(fig)
+
+
+def callback_fine_mapping(
+    locals: dict[str, Any],
+    source_features: npt.NDArray[Any],
+    target_features: npt.NDArray[Any],
+    fsaverage: Any,
+    mesh: str,
+    contrast_idx: int = 0,
+    device: torch.device = torch.device("cpu"),
+    output_dir: Path = Path("output"),
+) -> None:
+    # Get current transport plan and tensorize features
+    pi = _make_tensor(locals["pi"], device).to_sparse_coo()
+    source_features_tensor = _make_tensor(source_features, device)
+    target_features_tensor = _make_tensor(target_features, device)
+    transformed_features = torch.sparse.mm(
+        pi.transpose(0, 1),
+        source_features_tensor.T,
+    ).to_dense() / (
+        torch.sparse.sum(pi, dim=0).to_dense().reshape(-1, 1)
+        # Add very small value to handle null rows
+        + 1e-16
+    )
 
     fig = plt.figure(figsize=(3 * 3, 3))
     fig.suptitle(
@@ -240,7 +309,7 @@ def generate_gif(output_dir: Path, duration: float = 0.1) -> None:
     )
 
 
-def fugw_simple_mapping(
+def fugw_dense_mapping(
     output_dir: Path,
     source_features: npt.NDArray[Any],
     target_features: npt.NDArray[Any],
@@ -273,7 +342,7 @@ def fugw_simple_mapping(
         verbose=verbose,
         solver_params={"nits_bcd": nits_bcd, "nits_uot": nits_uot},
         callback_bcd=partial(
-            callback_one_mapping,
+            callback_coarse_mapping,
             fsaverage=fsaverage,
             mesh=mesh,
             source_features=source_features,
@@ -287,6 +356,79 @@ def fugw_simple_mapping(
         generate_gif(output_dir, duration=1)
 
     return mapping
+
+
+def fugw_sparse_mapping(
+    output_dir: Path,
+    source_features: npt.NDArray[Any],
+    target_features: npt.NDArray[Any],
+    geometry_embedding: torch.Tensor,
+    mesh_sample: npt.NDArray[Any],
+    fsaverage: Any,
+    mesh: str = "infl_left",
+    alpha_coarse: float = 0.5,
+    alpha_fine: float = 0.5,
+    rho_coarse: float = 1,
+    rho_fine: float = 1,
+    eps_coarse: float = 1,
+    eps_fine: float = 1,
+    selection_radius: float = 5,
+    nits_bcd: int = 100,
+    nits_uot: int = 1,
+    device: torch.device = torch.device("cpu"),
+    verbose: bool = True,
+    output_gif: bool = True,
+) -> FUGW:
+    coarse_mapping = FUGW(
+        alpha=alpha_coarse,
+        rho=rho_coarse,
+        eps=eps_coarse,
+    )
+
+    fine_mapping = FUGWSparse(
+        alpha=alpha_fine,
+        rho=rho_fine,
+        eps=eps_fine,
+    )
+
+    coarse_to_fine.fit(
+        source_features=source_features,
+        target_features=target_features,
+        source_geometry_embeddings=geometry_embedding,
+        target_geometry_embeddings=geometry_embedding,
+        source_sample=mesh_sample,
+        target_sample=mesh_sample,
+        coarse_mapping=coarse_mapping,
+        coarse_mapping_solver="mm",
+        coarse_mapping_solver_params={
+            "nits_bcd": nits_bcd,
+            "nits_uot": nits_uot,
+        },
+        coarse_pairs_selection_method="topk",
+        source_selection_radius=selection_radius,
+        target_selection_radius=selection_radius,
+        fine_mapping=fine_mapping,
+        fine_mapping_solver="mm",
+        fine_mapping_solver_params={
+            "nits_bcd": nits_bcd,
+            "nits_uot": nits_uot,
+        },
+        fine_callback_bcd=partial(
+            callback_fine_mapping,
+            fsaverage=fsaverage,
+            mesh=mesh,
+            source_features=source_features,
+            target_features=target_features,
+            device=device,
+            output_dir=output_dir,
+        ),
+        verbose=verbose,
+    )
+
+    if output_gif:
+        generate_gif(output_dir, duration=1)
+
+    return fine_mapping
 
 
 def fugw_coarse_barycenter(
@@ -427,21 +569,21 @@ def main() -> None:
         vertices, [4000, 5000], sigma=16, noise_level=0.2
     )
     simulated_target = generate_simulated_data(
-        vertices, [4010, 5010], sigma=16, noise_level=0.2
+        vertices, [4010, 5010, 10000], sigma=16, noise_level=0.2
     )
 
-    n_vertices = vertices.shape[0]
     simulated_source = simulated_source.reshape(1, -1)
     simulated_target = simulated_target.reshape(1, -1)
 
-    features_list = [simulated_source, simulated_target]
-    weights_list = [
-        np.ones(n_vertices) / n_vertices,
-        np.ones(n_vertices) / n_vertices,
-    ]
+    # features_list = [simulated_source, simulated_target]
+    # n_vertices = vertices.shape[0]
+    # weights_list = [
+    #     np.ones(n_vertices) / n_vertices,
+    #     np.ones(n_vertices) / n_vertices,
+    # ]
 
     alpha = 0.5
-    rho = float("inf")
+    rho = 1.0
     eps = 1e-4
 
     # print("Computing geometry...")
@@ -454,7 +596,7 @@ def main() -> None:
     #     f"output/one_mapping_alpha_{alpha}_rho_{rho}_eps_{eps}"
     # )
     # output_dir_one_mapping.mkdir(exist_ok=True, parents=True)
-    # _ = fugw_simple_mapping(
+    # _ = fugw_dense_mapping(
     #     output_dir_one_mapping,
     #     simulated_source,
     #     simulated_target,
@@ -496,14 +638,14 @@ def main() -> None:
         fsaverage[mesh], n_samples=1000
     )
 
-    output_dir_barycenter = Path(
-        f"output/bary_sparse_alpha_{alpha}_rho_{rho}_eps_{eps}"
+    output_dir_sparse_mapping = Path(
+        f"output/sparse_alpha_{alpha}_rho_{rho}_eps_{eps}"
     )
-    output_dir_barycenter.mkdir(exist_ok=True, parents=True)
-    _ = fugw_sparse_barycenter(
-        output_dir_barycenter,
-        features_list,
-        weights_list,
+    output_dir_sparse_mapping.mkdir(exist_ok=True, parents=True)
+    _ = fugw_sparse_mapping(
+        output_dir_sparse_mapping,
+        simulated_source,
+        simulated_target,
         geometry_embedding,
         mesh_sample,
         fsaverage,
@@ -515,13 +657,39 @@ def main() -> None:
         eps_coarse=eps,
         eps_fine=eps,
         selection_radius=5,
-        nits_barycenter=30,
-        nits_bcd=5,
-        nits_uot=100,
+        nits_bcd=100,
+        nits_uot=1,
         device=device,
-        verbose=False,
+        verbose=True,
         output_gif=True,
     )
+
+    # output_dir_barycenter = Path(
+    #     f"output/bary_sparse_alpha_{alpha}_rho_{rho}_eps_{eps}"
+    # )
+    # output_dir_barycenter.mkdir(exist_ok=True, parents=True)
+    # _ = fugw_sparse_barycenter(
+    #     output_dir_barycenter,
+    #     features_list,
+    #     weights_list,
+    #     geometry_embedding,
+    #     mesh_sample,
+    #     fsaverage,
+    #     mesh=mesh,
+    #     alpha_coarse=alpha,
+    #     alpha_fine=alpha,
+    #     rho_coarse=rho,
+    #     rho_fine=rho,
+    #     eps_coarse=eps,
+    #     eps_fine=eps,
+    #     selection_radius=5,
+    #     nits_barycenter=30,
+    #     nits_bcd=5,
+    #     nits_uot=100,
+    #     device=device,
+    #     verbose=False,
+    #     output_gif=True,
+    # )
 
 
 if __name__ == "__main__":
