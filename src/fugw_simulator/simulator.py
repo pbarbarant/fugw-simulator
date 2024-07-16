@@ -264,16 +264,16 @@ def fugw_sparse_barycenter(
 def main() -> None:
     device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
     mesh = "infl_left"
-    fsaverage = datasets.fetch_surf_fsaverage(mesh="fsaverage5")
+    fsaverage = datasets.fetch_surf_fsaverage(mesh="fsaverage3")
     vertices, _ = surface.load_surf_mesh(fsaverage[mesh])
 
     # Fsaverage3
-    # simulated_source = generate_simulated_data(
-    #     vertices, [300, 270], sigma=16, noise_level=0.2
-    # )
-    # simulated_target = generate_simulated_data(
-    #     vertices, [302, 101, 272], sigma=16, noise_level=0.2
-    # )
+    simulated_source = generate_simulated_data(
+        vertices, [300, 270], sigma=16, noise_level=0.2
+    )
+    simulated_target = generate_simulated_data(
+        vertices, [302, 101, 272], sigma=16, noise_level=0.2
+    )
 
     # Fsaverage4
     # simulated_source = generate_simulated_data(
@@ -284,12 +284,12 @@ def main() -> None:
     # )
 
     # Fsaverage5
-    simulated_source = generate_simulated_data(
-        vertices, [4000, 5000], sigma=16, noise_level=0.2
-    )
-    simulated_target = generate_simulated_data(
-        vertices, [4010, 5010, 10000], sigma=16, noise_level=0.2
-    )
+    # simulated_source = generate_simulated_data(
+    #     vertices, [4000, 5000], sigma=16, noise_level=0.2
+    # )
+    # simulated_target = generate_simulated_data(
+    #     vertices, [4010, 5010, 10000], sigma=16, noise_level=0.2
+    # )
 
     simulated_source = simulated_source.reshape(1, -1)
     simulated_target = simulated_target.reshape(1, -1)
@@ -305,90 +305,86 @@ def main() -> None:
     rho = 1.0
     eps = 1e-4
 
-    # print("Computing geometry...")
-    # geometry = compute_geometry_from_mesh(fsaverage[mesh])
-    # # Normalize geometry
-    # geometry = geometry / geometry.max()
-    # geometry_list = [geometry, geometry]
+    print("Computing geometry...")
+    geometry = compute_geometry_from_mesh(fsaverage[mesh])
+    # Normalize geometry
+    geometry = geometry / geometry.max()
+    geometry_list = [geometry, geometry]
 
-    # output_dir_one_mapping = Path(
-    #     f"output/one_mapping_alpha_{alpha}_rho_{rho}_eps_{eps}"
-    # )
-    # output_dir_one_mapping.mkdir(exist_ok=True, parents=True)
-    # _ = fugw_dense_mapping(
-    #     output_dir_one_mapping,
-    #     simulated_source,
-    #     simulated_target,
-    #     fsaverage,
-    #     mesh=mesh,
-    #     alpha=alpha,
-    #     rho=rho,
-    #     eps=eps,
-    #     nits_bcd=100,
-    #     nits_uot=1,
-    #     device=device,
-    #     verbose=True,
-    #     output_gif=True,
-    # )
+    output_dir = Path(f"output/FUGW/alpha_{alpha}_rho_{rho}_eps_{eps}")
+    output_dir.mkdir(exist_ok=True, parents=True)
+    _ = fugw_dense_mapping(
+        output_dir,
+        simulated_source,
+        simulated_target,
+        fsaverage,
+        mesh=mesh,
+        alpha=alpha,
+        rho=rho,
+        eps=eps,
+        nits_bcd=100,
+        nits_uot=1,
+        device=device,
+        verbose=True,
+        output_gif=True,
+    )
 
-    # output_dir_barycenter = Path(
-    #     f"output/barycenter_alpha_{alpha}_rho_{rho}_eps_{eps}"
-    # )
-    # output_dir_barycenter.mkdir(exist_ok=True, parents=True)
-    # _ = fugw_coarse_barycenter(
-    #     output_dir_barycenter,
-    #     features_list,
-    #     weights_list,
-    #     geometry_list,
-    #     fsaverage,
-    #     mesh=mesh,
-    #     alpha=0.5,
-    #     rho=1e-1,
-    #     eps=1e-4,
-    #     nits_barycenter=30,
-    #     nits_bcd=5,
-    #     nits_uot=100,
-    #     device=device,
-    #     verbose=False,
-    #     output_gif=True,
-    # )
+    output_dir = Path(
+        f"output/FUGWBarycenter/alpha_{alpha}_rho_{rho}_eps_{eps}"
+    )
+    output_dir.mkdir(exist_ok=True, parents=True)
+    _ = fugw_coarse_barycenter(
+        output_dir,
+        features_list,
+        weights_list,
+        geometry_list,
+        fsaverage,
+        mesh=mesh,
+        alpha=0.5,
+        rho=1e-1,
+        eps=1e-4,
+        nits_barycenter=30,
+        nits_bcd=5,
+        nits_uot=100,
+        device=device,
+        verbose=False,
+        output_gif=True,
+    )
 
     geometry_embedding, mesh_sample = sample_geometry(
-        fsaverage[mesh], n_samples=1000
+        fsaverage[mesh], n_samples=100
     )
 
-    # output_dir_sparse_mapping = Path(
-    #     f"output/sparse_alpha_{alpha}_rho_{rho}_eps_{eps}"
-    # )
-    # output_dir_sparse_mapping.mkdir(exist_ok=True, parents=True)
-    # _ = fugw_sparse_mapping(
-    #     output_dir_sparse_mapping,
-    #     simulated_source,
-    #     simulated_target,
-    #     geometry_embedding,
-    #     mesh_sample,
-    #     fsaverage,
-    #     mesh=mesh,
-    #     alpha_coarse=alpha,
-    #     alpha_fine=alpha,
-    #     rho_coarse=rho,
-    #     rho_fine=rho,
-    #     eps_coarse=eps,
-    #     eps_fine=eps,
-    #     selection_radius=5,
-    #     nits_bcd=100,
-    #     nits_uot=1,
-    #     device=device,
-    #     verbose=True,
-    #     output_gif=True,
-    # )
-
-    output_dir_barycenter = Path(
-        f"output/bary_sparse_alpha_{alpha}_rho_{rho}_eps_{eps}"
+    output_dir = Path(f"output/FUGWSparse/alpha_{alpha}_rho_{rho}_eps_{eps}")
+    output_dir.mkdir(exist_ok=True, parents=True)
+    _ = fugw_sparse_mapping(
+        output_dir,
+        simulated_source,
+        simulated_target,
+        geometry_embedding,
+        mesh_sample,
+        fsaverage,
+        mesh=mesh,
+        alpha_coarse=alpha,
+        alpha_fine=alpha,
+        rho_coarse=rho,
+        rho_fine=rho,
+        eps_coarse=eps,
+        eps_fine=eps,
+        selection_radius=5,
+        nits_bcd=100,
+        nits_uot=1,
+        device=device,
+        verbose=True,
+        output_gif=True,
     )
-    output_dir_barycenter.mkdir(exist_ok=True, parents=True)
+
+    output_dir = Path(
+        f"output/FUGWSparseBarycenter/alpha_{alpha}_rho_{rho}_eps_{eps}"
+    )
+    output_dir.mkdir(exist_ok=True, parents=True)
     _ = fugw_sparse_barycenter(
-        output_dir_barycenter,
+        output_dir,
         features_list,
         weights_list,
         geometry_embedding,
