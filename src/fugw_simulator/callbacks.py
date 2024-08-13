@@ -65,7 +65,7 @@ def callback_coarse_mapping(
         colorbar=False,
     )
     fig.tight_layout()
-    fig.savefig(output_dir / f"bcd_step_{locals['idx']}.png")
+    fig.savefig(output_dir / f"bcd_step_{locals['idx']}.png", dpi=300)
     plt.close(fig)
 
 
@@ -129,7 +129,7 @@ def callback_fine_mapping(
         colorbar=False,
     )
     fig.tight_layout()
-    fig.savefig(output_dir / f"bcd_step_{locals['idx']}.png")
+    fig.savefig(output_dir / f"bcd_step_{locals['idx']}.png", dpi=300)
     plt.close(fig)
 
 
@@ -176,5 +176,5 @@ def callback_barycenter(
         colorbar=False,
     )
     fig.tight_layout()
-    fig.savefig(output_dir / f"barycenter_step_{locals['idx']}.png")
+    fig.savefig(output_dir / f"barycenter_step_{locals['idx']}.png", dpi=300)
     plt.close(fig)
