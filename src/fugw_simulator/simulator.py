@@ -13,6 +13,7 @@ from fugw.mappings import (
     FUGWSparseBarycenter,
 )
 from fugw.scripts import coarse_to_fine
+from fugw.datasets import fetch_surf_geometry
 from nilearn import datasets, surface
 
 from fugw_simulator.callbacks import (
@@ -179,7 +180,8 @@ def fugw_coarse_barycenter(
         nits_barycenter=nits_barycenter,
         device=device,
         verbose=verbose,
-        init_barycenter_features=features_list[0],
+        init_barycenter_features=np.mean(features_list, axis=0),
+        solver="mm",
         solver_params={"nits_bcd": nits_bcd, "nits_uot": nits_uot},
         callback_barycenter=partial(
             callback_barycenter,
@@ -234,7 +236,8 @@ def fugw_sparse_barycenter(
         geometry_embedding,
         mesh_sample=mesh_sample,
         nits_barycenter=nits_barycenter,
-        init_barycenter_features=features_list[0],
+        init_barycenter_features=np.mean(features_list, axis=0),
+        solver="mm",
         coarse_mapping_solver_params={
             "nits_bcd": nits_bcd,
             "nits_uot": nits_uot,
@@ -264,32 +267,38 @@ def fugw_sparse_barycenter(
 def main() -> None:
     device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
     mesh = "infl_left"
-    fsaverage = datasets.fetch_surf_fsaverage(mesh="fsaverage3")
+    resolution = "fsaverage5"
+    prefix = Path(
+        "/data/parietal/store3/work/pbarbara/"
+        f"fugw-simulator/output/{resolution}"
+    )
+
+    fsaverage = datasets.fetch_surf_fsaverage(mesh=resolution)
     vertices, _ = surface.load_surf_mesh(fsaverage[mesh])
 
-    # Fsaverage3
-    simulated_source = generate_simulated_data(
-        vertices, [300, 270], sigma=16, noise_level=0.2
-    )
-    simulated_target = generate_simulated_data(
-        vertices, [302, 101, 272], sigma=16, noise_level=0.2
-    )
+    if resolution == "fsaverage3":
+        simulated_source = generate_simulated_data(
+            vertices, [300, 270], sigma=16, noise_level=0.2
+        )
+        simulated_target = generate_simulated_data(
+            vertices, [302, 101, 272], sigma=16, noise_level=0.2
+        )
 
-    # Fsaverage4
-    # simulated_source = generate_simulated_data(
-    #     vertices, [1000, 2000], sigma=16, noise_level=0.2
-    # )
-    # simulated_target = generate_simulated_data(
-    #     vertices, [1010, 2010], sigma=16, noise_level=0.2
-    # )
+    elif resolution == "fsaverage4":
+        simulated_source = generate_simulated_data(
+            vertices, [1000, 2000], sigma=16, noise_level=0.2
+        )
+        simulated_target = generate_simulated_data(
+            vertices, [1010, 2010], sigma=16, noise_level=0.2
+        )
 
-    # Fsaverage5
-    # simulated_source = generate_simulated_data(
-    #     vertices, [4000, 5000], sigma=16, noise_level=0.2
-    # )
-    # simulated_target = generate_simulated_data(
-    #     vertices, [4010, 5010, 10000], sigma=16, noise_level=0.2
-    # )
+    elif resolution == "fsaverage5":
+        simulated_source = generate_simulated_data(
+            vertices, [4000, 5000], sigma=16, noise_level=0.2
+        )
+        simulated_target = generate_simulated_data(
+            vertices, [4010, 5010, 10000], sigma=16, noise_level=0.2
+        )
 
     simulated_source = simulated_source.reshape(1, -1)
     simulated_target = simulated_target.reshape(1, -1)
@@ -301,87 +310,91 @@ def main() -> None:
         np.ones(n_vertices) / n_vertices,
     ]
 
-    alpha = 0.5
-    rho = 1.0
-    eps = 1e-4
-
     print("Computing geometry...")
-    geometry = compute_geometry_from_mesh(fsaverage[mesh])
-    # Normalize geometry
-    geometry = geometry / geometry.max()
-    geometry_list = [geometry, geometry]
-
-    output_dir = Path(f"output/FUGW/alpha_{alpha}_rho_{rho}_eps_{eps}")
-    output_dir.mkdir(exist_ok=True, parents=True)
-    _ = fugw_dense_mapping(
-        output_dir,
-        simulated_source,
-        simulated_target,
-        fsaverage,
+    geometry, _ = fetch_surf_geometry(
         mesh=mesh,
-        alpha=alpha,
-        rho=rho,
-        eps=eps,
-        nits_bcd=100,
-        nits_uot=1,
-        device=device,
-        verbose=True,
-        output_gif=True,
+        resolution=resolution,
+        method="euclidean",
     )
-
-    output_dir = Path(
-        f"output/FUGWBarycenter/alpha_{alpha}_rho_{rho}_eps_{eps}"
-    )
-    output_dir.mkdir(exist_ok=True, parents=True)
-    _ = fugw_coarse_barycenter(
-        output_dir,
-        features_list,
-        weights_list,
-        geometry_list,
-        fsaverage,
-        mesh=mesh,
-        alpha=0.5,
-        rho=1e-1,
-        eps=1e-4,
-        nits_barycenter=30,
-        nits_bcd=5,
-        nits_uot=100,
-        device=device,
-        verbose=False,
-        output_gif=True,
-    )
+    geometry = geometry / geometry.shape[0]
 
     geometry_embedding, mesh_sample = sample_geometry(
-        fsaverage[mesh], n_samples=100
+        fsaverage[mesh], n_samples=10000
     )
 
-    output_dir = Path(f"output/FUGWSparse/alpha_{alpha}_rho_{rho}_eps_{eps}")
-    output_dir.mkdir(exist_ok=True, parents=True)
-    _ = fugw_sparse_mapping(
-        output_dir,
-        simulated_source,
-        simulated_target,
-        geometry_embedding,
-        mesh_sample,
-        fsaverage,
-        mesh=mesh,
-        alpha_coarse=alpha,
-        alpha_fine=alpha,
-        rho_coarse=rho,
-        rho_fine=rho,
-        eps_coarse=eps,
-        eps_fine=eps,
-        selection_radius=2,
-        nits_bcd=5,
-        nits_uot=100,
-        device=device,
-        verbose=True,
-        output_gif=True,
-    )
+    # output_dir = Path(output_dir / "FUGW" / suffix)
+    # output_dir.mkdir(exist_ok=True, parents=True)
+    # _ = fugw_dense_mapping(
+    #     output_dir,
+    #     simulated_source,
+    #     simulated_target,
+    #     fsaverage,
+    #     mesh=mesh,
+    #     alpha=alpha,
+    #     rho=rho,
+    #     eps=eps,
+    #     nits_bcd=100,
+    #     nits_uot=1,
+    #     device=device,
+    #     verbose=True,
+    #     output_gif=True,
+    # )
 
-    output_dir = Path(
-        f"output/FUGWSparseBarycenter/alpha_{alpha}_rho_{rho}_eps_{eps}"
-    )
+    # alphas = [0.1, 0.5, 0.9]
+    # rhos = [10.0, 1.0, 1e-1]
+    # epsilons = [1.0, 1e-2, 1e-4]
+    # for alpha, rho, eps in product(alphas, rhos, epsilons):
+    #     suffix = f"alpha_{alpha}_rho_{rho}_eps_{eps}"
+    #     print(f"Running FUGWBarycenter with {suffix}...")
+    #     output_dir = Path(prefix / "FUGWBarycenter" / suffix)
+    #     output_dir.mkdir(exist_ok=True, parents=True)
+    #     _ = fugw_coarse_barycenter(
+    #         output_dir,
+    #         features_list,
+    #         weights_list,
+    #         [geometry],
+    #         fsaverage,
+    #         mesh=mesh,
+    #         alpha=alpha,
+    #         rho=rho,
+    #         eps=eps,
+    #         nits_barycenter=10,
+    #         nits_bcd=5,
+    #         nits_uot=100,
+    #         device=device,
+    #         verbose=True,
+    #         output_gif=True,
+    #     )
+
+    # output_dir = Path(prefix / "FUGWSparse" / suffix)
+    # output_dir.mkdir(exist_ok=True, parents=True)
+    # _ = fugw_sparse_mapping(
+    #     output_dir,
+    #     simulated_source,
+    #     simulated_target,
+    #     geometry_embedding,
+    #     mesh_sample,
+    #     fsaverage,
+    #     mesh=mesh,
+    #     alpha_coarse=alpha,
+    #     alpha_fine=alpha,
+    #     rho_coarse=rho,
+    #     rho_fine=rho,
+    #     eps_coarse=eps,
+    #     eps_fine=eps,
+    #     selection_radius=0.1,
+    #     nits_bcd=5,
+    #     nits_uot=100,
+    #     device=device,
+    #     verbose=True,
+    #     output_gif=True,
+    # )
+
+    alpha = 0.5
+    rho = 1.0
+    eps = 1e-1
+    suffix = f"alpha_{alpha}_rho_{rho}_eps_{eps}"
+    output_dir = Path(prefix / "FUGWSparseBarycenter" / suffix)
     output_dir.mkdir(exist_ok=True, parents=True)
     _ = fugw_sparse_barycenter(
         output_dir,
@@ -397,12 +410,12 @@ def main() -> None:
         rho_fine=rho,
         eps_coarse=eps,
         eps_fine=eps,
-        selection_radius=6,
+        selection_radius=0.1,
         nits_barycenter=30,
         nits_bcd=5,
         nits_uot=100,
         device=device,
-        verbose=False,
+        verbose=True,
         output_gif=True,
     )
 
